@@ -7,6 +7,7 @@ var Users = require('../app/collections/users');
 var User = require('../app/models/user');
 var Links = require('../app/collections/links');
 var Link = require('../app/models/link');
+var colors = require('colors');
 
 /************************************************************/
 // Mocha doesn't have a way to designate pending before blocks.
@@ -14,7 +15,7 @@ var Link = require('../app/models/link');
 // Remove the 'x' from beforeEach block when working on
 // authentication tests.
 /************************************************************/
-var xbeforeEach = function() {};
+var beforeEach = function() {};
 /************************************************************/
 
 
@@ -53,10 +54,10 @@ describe('', function() {
       .del()
       .catch(function(error) {
         // uncomment when writing authentication tests
-        // throw {
-        //   type: 'DatabaseError',
-        //   message: 'Failed to create test setup data'
-        // };
+        throw {
+          type: 'DatabaseError',
+          message: 'Failed to create test setup data'
+        };
       });
 
     // delete user Phillip from db so it can be created later for the test
@@ -65,18 +66,18 @@ describe('', function() {
       .del()
       .catch(function(error) {
         // uncomment when writing authentication tests
-        // throw {
-        //   type: 'DatabaseError',
-        //   message: 'Failed to create test setup data'
-        // };
+        throw {
+          type: 'DatabaseError',
+          message: 'Failed to create test setup data'
+        };
       });
   });
 
-  describe('Link creation:', function() {
+  xdescribe('Link creation:', function() {
 
     var requestWithSession = request.defaults({jar: true});
 
-    xbeforeEach(function(done) {
+    beforeEach(function(done) {
       // create a user that we can then log-in with
       new User({
         'username': 'Phillip',
@@ -114,7 +115,7 @@ describe('', function() {
       });
     });
 
-    describe('Shortening links:', function() {
+    xdescribe('Shortening links:', function() {
 
       var options = {
         'method': 'POST',
@@ -163,7 +164,7 @@ describe('', function() {
 
     }); // 'Shortening links'
 
-    describe('With previously saved urls:', function() {
+    xdescribe('With previously saved urls:', function() {
 
       var link;
 
@@ -191,6 +192,8 @@ describe('', function() {
 
         requestWithSession(options, function(error, res, body) {
           var code = res.body.code;
+          console.log(colors.yellow('this is the response: ' + JSON.stringify(res.body, null, 2)));
+          console.log(colors.yellow('here is code : ' + code));
           expect(code).to.equal(link.get('code'));
           done();
         });
@@ -226,7 +229,7 @@ describe('', function() {
 
   }); // 'Link creation'
 
-  xdescribe('Privileged Access:', function() {
+  describe('Privileged Access:', function() {
 
     it('Redirects to login page if a user tries to access the main page and is not signed in', function(done) {
       request('http://127.0.0.1:4568/', function(error, res, body) {
@@ -251,7 +254,7 @@ describe('', function() {
 
   }); // 'Priviledged Access'
 
-  xdescribe('Account Creation:', function() {
+  describe('Account Creation:', function() {
 
     it('Signup creates a user record', function(done) {
       var options = {
@@ -271,8 +274,8 @@ describe('', function() {
               var user = res[0]['username'];
             }
             expect(user).to.equal('Svnh');
-            done();
-          }).catch(function(err) {
+          }).then(done, done)
+          .catch(function(err) {
             throw {
               type: 'DatabaseError',
               message: 'Failed to create test setup data'
@@ -299,7 +302,7 @@ describe('', function() {
 
   }); // 'Account Creation'
 
-  xdescribe('Account Login:', function() {
+  describe('Account Login:', function() {
 
     var requestWithSession = request.defaults({jar: true});
 
@@ -328,6 +331,19 @@ describe('', function() {
       });
     });
 
+    it('saves session on login', function(done) {
+      var options = {
+        'method': 'GET',
+        'uri': 'http://127.0.0.1:4568/'
+      };
+
+      request(options, function(error, res, body) {
+        console.log(colors.blue(JSON.stringify(res, null, 2)));
+        expect(res.statusCode).to.equal(200);
+        done();
+      });
+    });
+
     it('Users that do not exist are kept on login page', function(done) {
       var options = {
         'method': 'POST',
@@ -345,5 +361,32 @@ describe('', function() {
     });
 
   }); // 'Account Login'
+
+  describe('Account Logout', function() {
+    var requestWithSession = request.defaults({jar: true});
+
+    it('Redirects the user to the login page on logout', function(done) {
+      var options = {
+        'method': 'POST',
+        'uri': 'http://127.0.0.1:4568/logout'
+      };
+      requestWithSession(options, function(error, res, body) {
+        expect(res.headers.location).to.equal('/login');
+        done();
+      });
+    });
+
+    it('Checks whether the session was destroyed on logout', function(done) {
+      var options = {
+        'method': 'POST',
+        'uri': 'http://127.0.0.1:4568/logout'
+      };
+      requestWithSession(options, function(error, res, body) {
+        expect(request.session).to.equal(undefined);
+        done();
+      });
+    });
+
+  });
 
 });

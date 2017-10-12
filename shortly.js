@@ -2,6 +2,10 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var bcrypt = require('bcrypt-nodejs');
+var morgan = require('morgan');
+var colors = require('colors');
+var session = require('express-session');
 
 
 var db = require('./app/config');
@@ -10,38 +14,99 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
+var checkUser = require('./lib/utility').checkUser;
 
 var app = express();
 
+
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
+//logger
+app.use(morgan('dev'));
 app.use(partials());
 // Parse JSON (uniform resource locators)
 app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
+app.use(session({
+  resave: false, // don't save session if unmodified
+  saveUninitialized: false, // don't create session until something stored
+  secret: 'shhhh, very secret'
+}));
 
-
-app.get('/', 
-function(req, res) {
+app.get('/', checkUser, function(req, res) {
+  res.render('index');
+});
+app.get('/create', checkUser, function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
-function(req, res) {
-  res.render('index');
-});
-
-app.get('/links', 
-function(req, res) {
+app.get('/links', checkUser, function(req, res) {
   Links.reset().fetch().then(function(links) {
-    res.status(200).send(links.models);
+    res.status(200).send(Links.models);
   });
 });
 
-app.post('/links', 
-function(req, res) {
+app.get('/login', function(req, res) {
+  res.render('login');
+});
+
+app.get('/signup', function(req, res) {
+  res.render('signup');
+});
+
+app.post('/signup', function(req, res) {
+  new User({ username: req.body.username}).fetch().then(function(found) {
+    if (found) {
+      res.redirect('/login');
+    } else {
+      bcrypt.genSalt(10, function(err, salt) {
+        bcrypt.hash(req.body.password, salt, null, function(err, hash) {
+
+          var newUser = {
+            username: req.body.username,
+            password: hash
+          };
+          new User(newUser).save()
+            .then(function(user) {
+              req.session.user = user;
+              res.redirect('/');
+            });
+        });
+      });
+    }
+  });
+});
+
+app.post('/login', function(req, res) {
+  Users.query({where: {username: req.body.username}})
+    .fetchOne()
+    .then(function(user) {
+      if (user) {
+        bcrypt.compare(req.body.password, user.get('password'), function(err, match) {
+          if (match) {
+            req.session.user = user; //creating session
+            res.redirect('/');
+          } else {
+            res.redirect('/login');
+          }
+        });
+      } else {
+        res.redirect('/login');
+      }
+    });
+});
+
+app.post('/logout', function(req, res) {
+  if (req.session.user){
+    req.session.destroy(function(){
+    });
+  }
+  res.redirect('/login');
+});
+
+app.post('/links', function(req, res) {
   var uri = req.body.url;
 
   if (!util.isValidUrl(uri)) {
@@ -64,9 +129,9 @@ function(req, res) {
           title: title,
           baseUrl: req.headers.origin
         })
-        .then(function(newLink) {
-          res.status(200).send(newLink);
-        });
+          .then(function(newLink) {
+            res.status(200).send(newLink);
+          });
       });
     }
   });
@@ -75,7 +140,6 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
-
 
 
 /************************************************************/
